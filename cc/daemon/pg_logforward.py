@@ -13,17 +13,12 @@ For early probing see methods find_plugins() and _probe_func() below.
 For late probing see method probe() of PgLogForwardPlugin class.
 """
 
-import errno
-import functools
-import select
-import socket
 import sys
 import time
 
 import skytools
-from zmq.eventloop.ioloop import IOLoop, PeriodicCallback
 
-from cc.daemon import CCDaemon
+from cc.daemon.udp_listener import UdpListener
 from cc.daemon.plugins.pg_logforward import PgLogForwardPlugin
 
 # use fast implementation if available, otherwise fall back to reference one
@@ -32,8 +27,6 @@ try:
     tnetstrings.parse = tnetstrings.pop
 except ImportError:
     import cc.tnetstrings as tnetstrings
-
-RECV_BUFSIZE = 8192 # MAX_MESSAGE_SIZE
 
 pg_elevels_itoa = {
     10: 'DEBUG5',
@@ -53,7 +46,7 @@ pg_elevels_itoa = {
 pg_elevels_atoi = dict ((v,k) for k,v in pg_elevels_itoa.iteritems())
 
 
-class PgLogForward (CCDaemon):
+class PgLogForward (UdpListener):
     """ UDP server to handle UDP stream sent by pg_logforward. """
 
     log = skytools.getLogger ('d:PgLogForward')
@@ -61,40 +54,9 @@ class PgLogForward (CCDaemon):
     def reload (self):
         super(PgLogForward, self).reload()
 
-        self.listen_host = self.cf.get ('listen-host')
-        self.listen_port = self.cf.getint ('listen-port')
         self.log_format = self.cf.get ('log-format')
         assert self.log_format in ['netstr']
         self.log_parsing_errors = self.cf.getbool ('log-parsing-errors', False)
-        self.stats_period = self.cf.getint ('stats-period', 30)
-
-    def startup (self):
-        super(PgLogForward, self).startup()
-
-        # plugins should be ready before we start receiving udp stream
-        self.load_plugins (log_fmt = self.log_format)
-        for p in self.plugins:
-            p.init (self.log_format)
-
-        self.listen_addr = (self.listen_host, self.listen_port)
-        self.sock = socket.socket (socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setblocking (0)
-        try:
-            self.sock.bind (self.listen_addr)
-        except Exception, e:
-            self.log.exception ("failed to bind to %s - %s", self.listen_addr, e)
-            raise
-
-        self.ioloop = IOLoop.instance()
-        callback = functools.partial (self.handle_udp, self.sock)
-        self.ioloop.add_handler (self.sock.fileno(), callback, self.ioloop.READ)
-
-        self.timer_stats = PeriodicCallback (self.send_stats, self.stats_period * 1000, self.ioloop)
-        self.timer_stats.start()
-
-    def find_plugins (self, mod_name, probe_func = None):
-        """ Overridden to use our custom probing function """
-        return super(PgLogForward, self).find_plugins (mod_name, self._probe_func)
 
     def _probe_func (self, cls):
         """ Custom plugin probing function """
@@ -105,6 +67,12 @@ class PgLogForward (CCDaemon):
             self.log.debug ("plugin %s does not support %r formatted messages", cls.__name__, self.log_format)
             return False
         return True
+
+    def init_plugins (self):
+        """ Load suitable plugins and initialise them """
+        self.load_plugins (log_fmt = self.log_format)
+        for p in self.plugins:
+            p.init (self.log_format)
 
     def parse_json (self, data):
         """ Parse JSON datagram sent by pg_logforward """
@@ -136,17 +104,6 @@ class PgLogForward (CCDaemon):
         """ Parse syslog datagram sent by pg_logforward """
         raise NotImplementedError
 
-    def handle_udp (self, sock, fd, events):
-        try:
-            while True:
-                data = sock.recv (RECV_BUFSIZE)
-                self.process (data)
-        except socket.error, e:
-            if e.errno != errno.EAGAIN:
-                self.log.error ("failed receiving data: %s", e)
-        except Exception, e:
-            self.log.exception ("handler crashed: %s", e)
-
     def process (self, data):
         start = time.time()
         size = len(data)
@@ -175,15 +132,6 @@ class PgLogForward (CCDaemon):
         self.log.info ("Starting IOLoop")
         self.ioloop.start()
         return 1
-
-    def stop (self):
-        """ Called from signal handler """
-        super(PgLogForward, self).stop()
-        self.log.info ("stopping")
-        self.ioloop.stop()
-        for p in self.plugins:
-            self.log.debug ("stopping %s", p.__class__.__name__)
-            p.stop()
 
 
 if __name__ == '__main__':
