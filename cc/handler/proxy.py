@@ -65,7 +65,10 @@ class BaseProxyHandler (CCHandler):
         self.zmq_tcp_keepalive_cnt = self.cf.getint ('zmq_tcp_keepalive_cnt', self.zmq_tcp_keepalive_cnt)
         self.remote_url = self.cf.get ('remote-cc')
         s = self.zctx.socket(zmq.XREQ)
-        s.setsockopt (zmq.HWM, self.zmq_hwm)
+        try:
+            s.setsockopt (zmq.HWM, self.zmq_hwm)
+        except AttributeError:
+            s.set_hwm (self.zmq_hwm)
         s.setsockopt (zmq.LINGER, self.zmq_linger)
         if self.zmq_rcvbuf > 0:
             s.setsockopt (zmq.RCVBUF, self.zmq_rcvbuf)

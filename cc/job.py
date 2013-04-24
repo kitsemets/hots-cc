@@ -1,4 +1,3 @@
-
 """
 CC daemon / task
 """
@@ -9,6 +8,10 @@ import sys
 
 import skytools
 import zmq
+
+# confusion among older and newer libzmq and their forks
+if not hasattr(zmq, 'XREQ'): zmq.XREQ = zmq.DEALER
+if not hasattr(zmq, 'XREP'): zmq.XREP = zmq.ROUTER
 
 from cc import json
 from cc.crypto import CryptoContext
@@ -150,7 +153,10 @@ class CCJob(skytools.DBScript):
         if not self.cc:
             self.cc = self.zctx.socket(zmq.XREQ)
             self.cc.setsockopt(zmq.LINGER, self.zmq_linger)
-            self.cc.setsockopt(zmq.HWM, self.zmq_hwm)
+            try:
+                self.cc.setsockopt (zmq.HWM, self.zmq_hwm)
+            except AttributeError:
+                self.cc.set_hwm (self.zmq_hwm)
             if self.zmq_rcvbuf > 0:
                 self.cc.setsockopt (zmq.RCVBUF, self.zmq_rcvbuf)
             if self.zmq_sndbuf > 0:

@@ -19,6 +19,10 @@ import skytools
 import zmq
 from zmq.eventloop.ioloop import IOLoop, PeriodicCallback
 
+# confusion among older and newer libzmq and their forks
+if not hasattr(zmq, 'XREQ'): zmq.XREQ = zmq.DEALER
+if not hasattr(zmq, 'XREP'): zmq.XREP = zmq.ROUTER
+
 from cc import __version__
 from cc.crypto import CryptoContext
 from cc.handler import cc_handler_lookup
@@ -151,7 +155,10 @@ class CCServer(skytools.BaseScript):
         # initialize local listen socket
         s = self.zctx.socket(zmq.XREP)
         s.setsockopt(zmq.LINGER, self.zmq_linger)
-        s.setsockopt(zmq.HWM, self.zmq_hwm)
+        try:
+            s.setsockopt (zmq.HWM, self.zmq_hwm)
+        except AttributeError:
+            s.set_hwm (self.zmq_hwm)
         if self.zmq_rcvbuf > 0:
             s.setsockopt (zmq.RCVBUF, self.zmq_rcvbuf)
         if self.zmq_sndbuf > 0:
