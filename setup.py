@@ -16,6 +16,7 @@ setup(
         'cc.daemon',
         'cc.daemon.plugins',
         'cc.daemon.plugins.pg_logforward',
+        'cc.daemon.plugins.skylog',
         'cc.task',
         'cc.test',
     ],
