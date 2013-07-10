@@ -4,6 +4,12 @@
 . Internal changes, that are mainly of interest for CC developers, can be found in CC repo log, not here.
 
 
+* ver. 0.8.8 (2013-jul-10)
+
+- Added cc.daemon.skylog to handle UDP stream sent by SkyTools' skylog
+- Added detailed documentation in reStructuredText format
+- Updated to work with latest pyzmq / libzmq
+
 * ver. 0.8.7 (2013-feb-01)
 
 - Reduced CPU and memory load of cc.daemon.logtail (LogfileTailer)

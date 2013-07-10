@@ -50,7 +50,10 @@ class Echo (CCHandler):
     def _make_socket (self, url):
         """ Create socket for pinging remote CC. """
         sock = self.zctx.socket (zmq.XREQ)
-        sock.setsockopt (zmq.HWM, self.zmq_hwm)
+        try:
+            sock.setsockopt (zmq.HWM, self.zmq_hwm)
+        except AttributeError:
+            sock.set_hwm (self.zmq_hwm)
         sock.setsockopt (zmq.LINGER, self.zmq_linger)
         sock.connect (url)
         return sock

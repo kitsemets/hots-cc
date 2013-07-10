@@ -116,7 +116,10 @@ class CCReqStream:
         ioloop = ioloop or IOLoop.instance()
 
         s = zctx.socket (zmq.XREQ)
-        s.setsockopt (zmq.HWM, self.zmq_hwm)
+        try:
+            s.setsockopt (zmq.HWM, self.zmq_hwm)
+        except AttributeError:
+            s.set_hwm (self.zmq_hwm)
         s.setsockopt (zmq.LINGER, self.zmq_linger)
         s.connect (cc_url)
 

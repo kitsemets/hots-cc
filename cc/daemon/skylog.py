@@ -1,16 +1,7 @@
 #! /usr/bin/env python
 
 """
-UDP server to handle UDP stream sent by pg_logforward.
-WWW: https://github.com/mpihlak/pg_logforward
-
-This also serves as an example of how to extend daemons with plugins.
-Plugins discovery, probing and loading is provided by CCDaemon class.
-
-Plugins can be probed early (upon discovery) or late (upon loading).
-This daemon and its plugins provide example implementation of both.
-For early probing see methods find_plugins() and _probe_func() below.
-For late probing see method probe() of PgLogForwardPlugin class.
+UDP server to handle UDP stream sent by SkyTools' skylog.
 """
 
 import sys
@@ -19,7 +10,7 @@ import time
 import skytools
 
 from cc.daemon.udp_listener import UdpListener
-from cc.daemon.plugins.pg_logforward import PgLogForwardPlugin
+from cc.daemon.plugins.skylog import SkyLogPlugin
 
 # use fast implementation if available, otherwise fall back to reference one
 try:
@@ -28,31 +19,14 @@ try:
 except ImportError:
     import cc.tnetstrings as tnetstrings
 
-pg_elevels_itoa = {
-    10: 'DEBUG5',
-    11: 'DEBUG4',
-    12: 'DEBUG3',
-    13: 'DEBUG2',
-    14: 'DEBUG1',
-    15: 'LOG',
-    16: 'COMMERROR',
-    17: 'INFO',
-    18: 'NOTICE',
-    19: 'WARNING',
-    20: 'ERROR',
-    21: 'FATAL',
-    22: 'PANIC',
-    }
-pg_elevels_atoi = dict ((v,k) for k,v in pg_elevels_itoa.iteritems())
 
+class SkyLog (UdpListener):
+    """ UDP server to handle UDP stream sent by skytools' skylog. """
 
-class PgLogForward (UdpListener):
-    """ UDP server to handle UDP stream sent by pg_logforward. """
-
-    log = skytools.getLogger ('d:PgLogForward')
+    log = skytools.getLogger ('d:SkyLog')
 
     def reload (self):
-        super(PgLogForward, self).reload()
+        super(SkyLog, self).reload()
 
         self.log_format = self.cf.get ('log-format')
         assert self.log_format in ['netstr']
@@ -60,7 +34,7 @@ class PgLogForward (UdpListener):
 
     def _probe_func (self, cls):
         """ Custom plugin probing function """
-        if not issubclass (cls, PgLogForwardPlugin):
+        if not issubclass (cls, SkyLogPlugin):
             self.log.debug ("plugin %s is not of supported type", cls.__name__)
             return False
         if self.log_format not in cls.LOG_FORMATS:
@@ -75,33 +49,26 @@ class PgLogForward (UdpListener):
             p.init (self.log_format)
 
     def parse_json (self, data):
-        """ Parse JSON datagram sent by pg_logforward """
+        """ Parse JSON datagram sent by skylog """
         raise NotImplementedError
 
     def parse_netstr (self, data):
-        """ Parse netstrings datagram sent by pg_logforward """
+        """ Parse tnetstrings datagram sent by skylog """
         try:
-            keys = [ "elevel", "sqlerrcode", "username", "database",
-                    "remotehost", "funcname", "message", "detail",
-                    "hint", "context", "debug_query_string" ]
-            pos = 0
-            res = {}
-            while data:
-                res[keys[pos]], data = tnetstrings.parse (data)
-                pos += 1
-            res['elevel'] = int(res['elevel'])
-            res['elevel_text'] = pg_elevels_itoa[res['elevel']]
-            res['sqlerrcode'] = int(res['sqlerrcode'])
-            return res
+            msg, rest = tnetstrings.parse (data)
+            if rest:
+                self.log.warning ("netstr parsing leftover: %r", rest)
+                self.log.debug ("failed tnetstring: [%i] %r", len(data), data)
+            return msg
 
         except Exception, e:
             if self.log_parsing_errors:
                 self.log.warning ("netstr parsing error: %s", e)
-                self.log.debug ("failed netstring: {%s} [%i] %r", keys[pos], len(data), data)
+                self.log.debug ("failed tnetstring: [%i] %r", len(data), data)
             return None
 
     def parse_syslog (self, data):
-        """ Parse syslog datagram sent by pg_logforward """
+        """ Parse syslog datagram sent by skylog """
         raise NotImplementedError
 
     def process (self, data):
@@ -123,9 +90,9 @@ class PgLogForward (UdpListener):
 
         # update stats
         taken = time.time() - start
-        self.stat_inc ('pg_logforward.count')
-        self.stat_inc ('pg_logforward.bytes', size)
-        self.stat_inc ('pg_logforward.seconds', taken)
+        self.stat_inc ('skylog.count')
+        self.stat_inc ('skylog.bytes', size)
+        self.stat_inc ('skylog.seconds', taken)
 
     def work (self):
         self.log.info ("Listening on %s for %s formatted messages", self.listen_addr, self.log_format)
@@ -135,5 +102,5 @@ class PgLogForward (UdpListener):
 
 
 if __name__ == '__main__':
-    s = PgLogForward ('pg_logforward', sys.argv[1:])
+    s = SkyLog ('skylog', sys.argv[1:])
     s.start()
