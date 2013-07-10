@@ -228,6 +228,46 @@ Config example:
     module = cc.daemon.plugins.pg_logforward.example_logwatch
 
 
+SkyLog (``skylog``)
+===================
+
+UDP server to handle UDP stream sent by SkyTools_' skylog.
+
+.. _SkyTools: http://pgfoundry.org/projects/skytools
+
+Config options:
+---------------
+
+* ``listen-host`` -- host name or IP address on which to listen to incoming UDP stream
+
+* ``listen-port`` -- port number on which to listen to incoming UDP stream
+
+* ``log-format`` -- format of the incoming messages (datagrams)
+
+  - 'json', 'netstr', 'syslog'
+
+* ``plugins`` -- list of suitable plugins to use for processing of the incoming messages
+
+* ``log-parsing-errors`` -- whether to log warning when parsing of received datagram fails; boolean
+
+  - default: false
+
+* ``stats-period`` -- how often to send statistics out; in seconds
+
+  - default: 30 seconds
+
+Config example:
+---------------
+::
+
+    [d:skylog]
+    module = cc.daemon.skylog
+    listen-host = 0.0.0.0
+    listen-port = 12345
+    log-format = netstr
+    plugins =
+
+
 TaskRunner (``task_runner``)
 ============================
 
