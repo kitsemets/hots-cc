@@ -131,7 +131,7 @@ start_server() {
             errcode=$?
         else
 # if we are using a daemonuser then change the user id
-        chown $DAEMONUSER:root `dirname "$PIDFILE"`
+            chown $DAEMONUSER:root `dirname "$PIDFILE"`
             start-stop-daemon --start --quiet --pidfile $PIDFILE \
                         --chuid $DAEMONUSER \
                         --exec $DAEMON -- $DAEMON_OPTS
